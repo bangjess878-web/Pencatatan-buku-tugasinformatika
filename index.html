@@ -1,0 +1,509 @@
+--- README.md ---
+
+Pencatatan Buku (Acode)
+
+Project kecil: Pencatatan Buku dengan:
+
+Login Google via Firebase Authentication
+
+CRUD buku via Firestore
+
+Halaman kategori terpisah (Fiksi, Pembelajaran, Dongeng, Artikel, Berita)
+
+Tabel vertikal (setiap buku ditampilkan sebagai kartu)
+
+Styling di styles.css
+
+
+> Cara pakai: edit firebase-init.js dan masukkan konfigurasi Firebase kamu, lalu upload ke hosting (GitHub Pages atau hosting lain). Untuk Google Sign-In dan Firestore harus aktif di Firebase Console.
+
+
+
+--- firebase-init.js --- // GANTI nilai di bawah ini dengan konfigurasi Firebase milikmu // Dapatkan dari Firebase Console > Project settings > Your apps (SDK config) export const firebaseConfig = { apiKey: "YOUR_API_KEY", authDomain: "YOUR_PROJECT_ID.firebaseapp.com", projectId: "YOUR_PROJECT_ID", storageBucket: "YOUR_PROJECT_ID.appspot.com", messagingSenderId: "YOUR_MESSAGING_SENDER_ID", appId: "YOUR_APP_ID" };
+
+--- index.html --- <!doctype html>
+
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login - Pencatatan Buku</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="centered">
+    <h1 class="rainbow-title">Pencatatan Buku</h1>
+    <div class="auth-card">
+      <h2>Masuk dengan Google</h2>
+      <button id="btn-google" class="btn">Login dengan Google</button>
+      <p class="muted">Atau gunakan akun Google Anda</p>
+    </div>
+  </main>  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
+    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
+    import { firebaseConfig } from './firebase-init.js';
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    document.getElementById('btn-google').addEventListener('click', async () => {
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (e) {
+        alert('Login gagal: ' + e.message);
+        console.error(e);
+      }
+    });
+
+    onAuthStateChanged(auth, user => {
+      if (user) location.href = 'home.html';
+    });
+  </script></body>
+</html>--- home.html --- <!doctype html>
+
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Home - Pencatatan Buku</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1 class="rainbow-title">Pencatatan Buku</h1>
+    <nav class="top-nav">
+      <a href="home.html">Home</a>
+      <a href="fiksi.html">Buku Fiksi</a>
+      <a href="pembelajaran.html">Buku Pembelajaran</a>
+      <a href="dongeng.html">Dongeng</a>
+      <a href="artikel.html">Artikel</a>
+      <a href="berita.html">Berita</a>
+      <button id="btn-logout" class="btn small">Logout</button>
+    </nav>
+  </header>  <main class="container">
+    <section class="banner">
+      <img src="home.jpg" alt="Banner Home" class="banner-img">
+    </section><section class="add-section">
+  <h2>Tambah Buku</h2>
+  <form id="bookForm" class="book-form">
+    <input id="title" placeholder="Judul" required>
+    <input id="author" placeholder="Penulis" required>
+    <input id="year" type="number" placeholder="Tahun" required>
+    <select id="category" required>
+      <option value="">-- Pilih Kategori --</option>
+      <option>Fiksi</option>
+      <option>Pembelajaran</option>
+      <option>Dongeng</option>
+      <option>Artikel</option>
+      <option>Berita</option>
+    </select>
+    <div class="form-actions">
+      <button type="submit" class="btn">Simpan</button>
+      <button type="button" id="btn-cancel" class="btn ghost">Batal</button>
+    </div>
+  </form>
+</section>
+
+<section>
+  <h2>Daftar Buku</h2>
+  <div id="booksContainer"></div>
+</section>
+
+  </main>  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
+    import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
+    import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
+    import { firebaseConfig } from './firebase-init.js';
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const booksContainer = document.getElementById('booksContainer');
+    const bookForm = document.getElementById('bookForm');
+    const btnLogout = document.getElementById('btn-logout');
+
+    let editId = null;
+
+    onAuthStateChanged(auth, user => {
+      if (!user) return location.href = 'index.html';
+      loadBooks();
+    });
+
+    btnLogout.addEventListener('click', async () => {
+      await signOut(auth);
+      location.href = 'index.html';
+    });
+
+    async function loadBooks() {
+      booksContainer.innerHTML = '';
+      const snapshot = await getDocs(collection(db, 'books'));
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const el = createBookCard(docSnap.id, data);
+        booksContainer.appendChild(el);
+      });
+    }
+
+    function createBookCard(id, data) {
+      const card = document.createElement('div');
+      card.className = 'book-card';
+      card.innerHTML = `
+        <p><strong>Judul:</strong> ${escapeHtml(data.title)}</p>
+        <p><strong>Penulis:</strong> ${escapeHtml(data.author)}</p>
+        <p><strong>Tahun:</strong> ${escapeHtml(data.year)}</p>
+        <p><strong>Kategori:</strong> ${escapeHtml(data.category)}</p>
+        <div class="card-actions">
+          <button class="btn small" data-id="${id}" data-action="edit">Edit</button>
+          <button class="btn small ghost" data-id="${id}" data-action="delete">Hapus</button>
+        </div>
+      `;
+      card.querySelector('[data-action="edit"]').addEventListener('click', () => startEdit(id, data));
+      card.querySelector('[data-action="delete"]').addEventListener('click', () => removeBook(id));
+      return card;
+    }
+
+    function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+    async function startEdit(id, data){
+      editId = id;
+      document.getElementById('title').value = data.title;
+      document.getElementById('author').value = data.author;
+      document.getElementById('year').value = data.year;
+      document.getElementById('category').value = data.category;
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+
+    async function removeBook(id){
+      if (!confirm('Yakin ingin menghapus buku ini?')) return;
+      await deleteDoc(doc(db, 'books', id));
+      loadBooks();
+    }
+
+    bookForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      const author = document.getElementById('author').value.trim();
+      const year = document.getElementById('year').value.trim();
+      const category = document.getElementById('category').value;
+      if (!title || !author || !year || !category) return alert('Lengkapi semua form');
+
+      if (editId) {
+        const ref = doc(db, 'books', editId);
+        await updateDoc(ref, { title, author, year, category });
+        editId = null;
+      } else {
+        await addDoc(collection(db, 'books'), { title, author, year, category });
+      }
+      bookForm.reset();
+      loadBooks();
+    });
+  </script></body>
+</html>--- fiksi.html --- <!doctype html>
+
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Buku Fiksi - Pencatatan Buku</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1 class="rainbow-title">Buku Fiksi</h1>
+    <nav class="top-nav">
+      <a href="home.html">Home</a>
+      <a href="fiksi.html">Fiksi</a>
+      <a href="pembelajaran.html">Pembelajaran</a>
+      <a href="dongeng.html">Dongeng</a>
+      <a href="artikel.html">Artikel</a>
+      <a href="berita.html">Berita</a>
+      <button id="btn-logout-f" class="btn small">Logout</button>
+    </nav>
+  </header>  <main class="container">
+    <section>
+      <h2>Daftar Buku Fiksi</h2>
+      <div id="booksContainerF"></div>
+    </section>
+  </main>  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
+    import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
+    import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
+    import { firebaseConfig } from './firebase-init.js';
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const container = document.getElementById('booksContainerF');
+    const btnLogout = document.getElementById('btn-logout-f');
+
+    onAuthStateChanged(auth, user => {
+      if (!user) return location.href = 'index.html';
+      load();
+    });
+
+    btnLogout.addEventListener('click', async () => { await signOut(auth); location.href = 'index.html'; });
+
+    async function load(){
+      container.innerHTML = '';
+      const snapshot = await getDocs(collection(db, 'books'));
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.category === 'Fiksi'){
+          const el = document.createElement('div');
+          el.className = 'book-card';
+          el.innerHTML = `<p><strong>Judul:</strong> ${escapeHtml(data.title)}</p><p><strong>Penulis:</strong> ${escapeHtml(data.author)}</p><p><strong>Tahun:</strong> ${escapeHtml(data.year)}</p>`;
+          container.appendChild(el);
+        }
+      });
+    }
+    function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  </script></body>
+</html>--- pembelajaran.html ---
+
+<!-- same structure as fiksi.html but filter category === 'Pembelajaran' --><!doctype html>
+
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Buku Pembelajaran - Pencatatan Buku</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1 class="rainbow-title">Buku Pembelajaran</h1>
+    <nav class="top-nav">
+      <a href="home.html">Home</a>
+      <a href="fiksi.html">Fiksi</a>
+      <a href="pembelajaran.html">Pembelajaran</a>
+      <a href="dongeng.html">Dongeng</a>
+      <a href="artikel.html">Artikel</a>
+      <a href="berita.html">Berita</a>
+      <button id="btn-logout-p" class="btn small">Logout</button>
+    </nav>
+  </header>  <main class="container">
+    <section>
+      <h2>Daftar Buku Pembelajaran</h2>
+      <div id="booksContainerP"></div>
+    </section>
+  </main>  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
+    import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
+    import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
+    import { firebaseConfig } from './firebase-init.js';
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const container = document.getElementById('booksContainerP');
+    const btnLogout = document.getElementById('btn-logout-p');
+
+    onAuthStateChanged(auth, user => {
+      if (!user) return location.href = 'index.html';
+      load();
+    });
+
+    btnLogout.addEventListener('click', async () => { await signOut(auth); location.href = 'index.html'; });
+
+    async function load(){
+      container.innerHTML = '';
+      const snapshot = await getDocs(collection(db, 'books'));
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.category === 'Pembelajaran'){
+          const el = document.createElement('div');
+          el.className = 'book-card';
+          el.innerHTML = `<p><strong>Judul:</strong> ${escapeHtml(data.title)}</p><p><strong>Penulis:</strong> ${escapeHtml(data.author)}</p><p><strong>Tahun:</strong> ${escapeHtml(data.year)}</p>`;
+          container.appendChild(el);
+        }
+      });
+    }
+    function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  </script></body>
+</html>--- dongeng.html ---
+
+<!-- same structure as fiksi.html but filter category === 'Dongeng' --><!doctype html>
+
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Buku Dongeng - Pencatatan Buku</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1 class="rainbow-title">Buku Dongeng</h1>
+    <nav class="top-nav">
+      <a href="home.html">Home</a>
+      <a href="fiksi.html">Fiksi</a>
+      <a href="pembelajaran.html">Pembelajaran</a>
+      <a href="dongeng.html">Dongeng</a>
+      <a href="artikel.html">Artikel</a>
+      <a href="berita.html">Berita</a>
+      <button id="btn-logout-d" class="btn small">Logout</button>
+    </nav>
+  </header>  <main class="container">
+    <section>
+      <h2>Daftar Buku Dongeng</h2>
+      <div id="booksContainerD"></div>
+    </section>
+  </main>  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
+    import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
+    import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
+    import { firebaseConfig } from './firebase-init.js';
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const container = document.getElementById('booksContainerD');
+    const btnLogout = document.getElementById('btn-logout-d');
+
+    onAuthStateChanged(auth, user => {
+      if (!user) return location.href = 'index.html';
+      load();
+    });
+
+    btnLogout.addEventListener('click', async () => { await signOut(auth); location.href = 'index.html'; });
+
+    async function load(){
+      container.innerHTML = '';
+      const snapshot = await getDocs(collection(db, 'books'));
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.category === 'Dongeng'){
+          const el = document.createElement('div');
+          el.className = 'book-card';
+          el.innerHTML = `<p><strong>Judul:</strong> ${escapeHtml(data.title)}</p><p><strong>Penulis:</strong> ${escapeHtml(data.author)}</p><p><strong>Tahun:</strong> ${escapeHtml(data.year)}</p>`;
+          container.appendChild(el);
+        }
+      });
+    }
+    function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  </script></body>
+</html>--- artikel.html ---
+
+<!-- same structure as fiksi.html but filter category === 'Artikel' --><!doctype html>
+
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Buku Artikel - Pencatatan Buku</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1 class="rainbow-title">Buku Artikel</h1>
+    <nav class="top-nav">
+      <a href="home.html">Home</a>
+      <a href="fiksi.html">Fiksi</a>
+      <a href="pembelajaran.html">Pembelajaran</a>
+      <a href="dongeng.html">Dongeng</a>
+      <a href="artikel.html">Artikel</a>
+      <a href="berita.html">Berita</a>
+      <button id="btn-logout-a" class="btn small">Logout</button>
+    </nav>
+  </header>  <main class="container">
+    <section>
+      <h2>Daftar Buku Artikel</h2>
+      <div id="booksContainerA"></div>
+    </section>
+  </main>  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
+    import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
+    import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
+    import { firebaseConfig } from './firebase-init.js';
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const container = document.getElementById('booksContainerA');
+    const btnLogout = document.getElementById('btn-logout-a');
+
+    onAuthStateChanged(auth, user => {
+      if (!user) return location.href = 'index.html';
+      load();
+    });
+
+    btnLogout.addEventListener('click', async () => { await signOut(auth); location.href = 'index.html'; });
+
+    async function load(){
+      container.innerHTML = '';
+      const snapshot = await getDocs(collection(db, 'books'));
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.category === 'Artikel'){
+          const el = document.createElement('div');
+          el.className = 'book-card';
+          el.innerHTML = `<p><strong>Judul:</strong> ${escapeHtml(data.title)}</p><p><strong>Penulis:</strong> ${escapeHtml(data.author)}</p><p><strong>Tahun:</strong> ${escapeHtml(data.year)}</p>`;
+          container.appendChild(el);
+        }
+      });
+    }
+    function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  </script></body>
+</html>--- berita.html ---
+
+<!-- same structure as fiksi.html but filter category === 'Berita' --><!doctype html>
+
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Buku Berita - Pencatatan Buku</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1 class="rainbow-title">Buku Berita</h1>
+    <nav class="top-nav">
+      <a href="home.html">Home</a>
+      <a href="fiksi.html">Fiksi</a>
+      <a href="pembelajaran.html">Pembelajaran</a>
+      <a href="dongeng.html">Dongeng</a>
+      <a href="artikel.html">Artikel</a>
+      <a href="berita.html">Berita</a>
+      <button id="btn-logout-b" class="btn small">Logout</button>
+    </nav>
+  </header>  <main class="container">
+    <section>
+      <h2>Daftar Buku Berita</h2>
+      <div id="booksContainerB"></div>
+    </section>
+  </main>  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
+    import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
+    import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
+    import { firebaseConfig } from './firebase-init.js';
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const container = document.getElementById('booksContainerB');
+    const btnLogout = document.getElementById('btn-logout-b');
+
+    onAuthStateChanged(auth, user => {
+      if (!user) return location.href = 'index.html';
+      load();
+    });
+
+    btnLogout.addEventListener('click', async () => { await signOut(auth); location.href = 'index.html'; });
+
+    async function load(){
+      container.innerHTML = '';
+      const snapshot = await getDocs(collection(db, 'books'));
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.category === 'Berita'){
+          const el = document.createElement('div');
+          el.className = 'book-card';
+          el.innerHTML = `<p><strong>Judul:</strong> ${escapeHtml(data.title)}</p><p><strong>Penulis:</strong> ${escapeHtml(data.author)}</p><p><str
